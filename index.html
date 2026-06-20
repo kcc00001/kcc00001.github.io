@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-Hant"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
@@ -117,7 +118,7 @@
   /* 固定的 Y 軸 */
   #y-axis {
     width: 50px;
-    height: calc(100% - 120px); /* 留給 X 軸標籤的高度增加到 120px */
+    height: calc(100% - 120px); 
     position: relative;
     border-right: 1px solid #ddd;
     background-color: #fff;
@@ -176,9 +177,9 @@
     border-radius: 4px;
   }
 
-  /* 實際圖形與 X 軸的畫布（透過 RWD 媒體查詢動態控制寬度） */
+  /* 實際圖形與 X 軸的畫布 */
   #scroll-content {
-    width: 2000px; /* 電腦版預設寬度 */
+    width: 2000px; 
     height: 100%;
     position: relative;
   }
@@ -207,7 +208,7 @@
     left: 0;
   }
 
-  /* X 軸標籤容器：完美對齊點 */
+  /* X 軸標籤容器 */
   .x-label-container {
     position: absolute;
     top: 15px;
@@ -267,23 +268,22 @@
     line-height: 1.5;
   }
 
-  /* 📱 響應式手機板智慧調節 (螢幕寬度小於 768px 時觸發) */
+  /* 📱 響應式手機板智慧調節 */
   @media (max-width: 768px) {
     #title-area { font-size: 20px; }
     #scroll-content {
-      width: 1100px; /* 手機板縮減總寬度，避免拉太長，但保留適度滾動空間 */
+      width: 1100px; 
     }
     .x-label-container {
       width: 110px;
       top: 5px;
-      /* 關鍵：將長文字框旋轉 45 度，防止手機上橫向擠壓重疊 */
       transform: translateX(-20%) rotate(35deg);
       justify-content: flex-start;
     }
     .x-label {
       text-align: left;
       font-size: 10px;
-      white-space: nowrap; /* 手機板旋轉後，不自動換行改用單行延伸更美觀 */
+      white-space: nowrap; 
       overflow: hidden;
       text-overflow: ellipsis;
       max-width: 130px;
@@ -445,7 +445,7 @@
       circle.setAttribute('class', 'data-point');
       circle.setAttribute('cx', p.x);
       circle.setAttribute('cy', p.y);
-      circle.setAttribute('r', window.innerWidth < 768 ? 7 : 6); // 手機板點稍微放大好按
+      circle.setAttribute('r', window.innerWidth < 768 ? 7 : 6); 
       circle.setAttribute('fill', emotions[data[index].emotionIndex].color);
       pointsGroupElement.appendChild(circle);
 
@@ -457,7 +457,7 @@
         }
       };
 
-      // 支援滑鼠與手機觸控的拖曳核心邏輯
+      // 拖曳邏輯
       let isDragging = false;
       let startY, startScore;
 
@@ -507,7 +507,7 @@
         document.addEventListener('mouseup', onMouseUp);
       };
 
-      // 手機觸控事件 (解決行動裝置無法拖曳問題)
+      // 手機觸控事件
       circle.addEventListener('touchstart', function(e) {
         if(e.touches.length === 1) {
           startDrag(e.touches[0].clientY);
@@ -516,7 +516,7 @@
 
       circle.addEventListener('touchmove', function(e) {
         if(isDragging && e.touches.length === 1) {
-          e.preventDefault(); // 防止拖曳時網格跟著捲動
+          e.preventDefault(); 
           moveDrag(e.touches[0].clientY);
         }
       }, {passive: false});
@@ -544,23 +544,42 @@
     }
   }
 
-  // 下載功能 (智慧判定當前是手機模式還是電腦模式排版，完美輸出)
+  // 重構後的穩定下載功能：100% 解決手機版漏點、漏背景線的問題
   function downloadChartAsPNG() {
-    const svg = document.getElementById('chart-svg');
     const fullWidth = scrollContentElement.clientWidth;
     const fullHeight = scrollContentElement.clientHeight;
     const isMobile = window.innerWidth < 768;
-    const yAxisWidth = 50;
+    const yAxisWidth = 50; // Y軸寬度
 
+    // 建立純淨 Canvas
     const canvas = document.createElement('canvas');
     canvas.width = fullWidth + yAxisWidth;
     canvas.height = fullHeight;
     const ctx = canvas.getContext('2d');
 
+    // 1. 底色填滿白色
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // 各項高度基準設定 (與目前網頁畫面完全一致)
     const yAxisHeight = chartAreaElement.clientHeight;
+    const chartHeight = yAxisHeight - 40; 
+    const yOrigin = yAxisHeight - 20;     
+    const paddingX = isMobile ? 50 : 80; 
+    const xStep = (fullWidth - paddingX * 2) / (data.length - 1);
+
+    // 2. 繪製背景網格橫線 (確保下載的圖也有對齊線)
+    ctx.strokeStyle = '#f5f5f5';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 100; i += 10) {
+      const yPos = yOrigin - (i / 100) * chartHeight;
+      ctx.beginPath();
+      ctx.moveTo(yAxisWidth, yPos);
+      ctx.lineTo(canvas.width, yPos);
+      ctx.stroke();
+    }
+
+    // 3. 繪製左側 Y 軸主分隔線
     ctx.strokeStyle = '#dddddd';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -568,19 +587,17 @@
     ctx.lineTo(yAxisWidth, yAxisHeight);
     ctx.stroke();
 
+    // 4. 繪製 Y 軸 0 ~ 100 數字標籤
     ctx.font = '12px Arial';
     ctx.fillStyle = '#666666';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    
-    const chartHeight = yAxisHeight - 40; 
-    const yOrigin = yAxisHeight - 20;     
-    
     for (let i = 0; i <= 100; i += 10) {
       const yPos = yOrigin - (i / 100) * chartHeight;
       ctx.fillText(i, yAxisWidth - 8, yPos);
     }
 
+    // 5. 繪製 Y 軸側邊標題「情緒強度」
     ctx.save();
     ctx.translate(12, yAxisHeight / 2);
     ctx.rotate(-Math.PI / 2);
@@ -590,92 +607,112 @@
     ctx.fillText('情緒強度', 0, 0);
     ctx.restore();
 
-    const svgString = new XMLSerializer().serializeToString(svg);
-    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-    const URL = window.URL || window.webkitURL || window;
-    const blobURL = URL.createObjectURL(svgBlob);
-    
-    const image = new Image();
-    image.onload = function() {
-      ctx.drawImage(image, yAxisWidth, 0);
+    // 再度重新計算所有點在 Canvas 上的絕對 X, Y 座標 (加上 Y 軸偏移植)
+    const canvasPoints = data.map((d, index) => ({
+      x: yAxisWidth + paddingX + index * xStep,
+      y: yOrigin - (d.score / 100) * chartHeight
+    }));
 
-      const xLabels = document.querySelectorAll('.x-label-container');
-      xLabels.forEach((container) => {
-        const label = container.querySelector('.x-label');
-        if (!label) return;
+    // 6. 繪製核心「折線」
+    ctx.strokeStyle = '#555555';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    canvasPoints.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+    ctx.stroke();
 
-        const leftX = parseFloat(container.style.left) + yAxisWidth;
-        const text = label.innerText;
+    // 7. 繪製核心「彩色數據圓點」 (這步改用原生 Canvas 繪製，徹底根除手機漏點 Bug)
+    const dotRadius = isMobile ? 7 : 6;
+    canvasPoints.forEach((p, index) => {
+      ctx.fillStyle = emotions[data[index].emotionIndex].color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, dotRadius, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      // 加上細微的圓點白邊，讓質感更好
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
 
-        ctx.save();
-        if (isMobile) {
-          // 📱 手機板輸出：模擬 35 度旋轉排版
-          ctx.translate(leftX, yAxisHeight + 12);
-          ctx.rotate(35 * Math.PI / 180);
-          
-          ctx.fillStyle = '#ffe0b2';
-          ctx.beginPath();
-          ctx.roundRect ? ctx.roundRect(0, 0, 130, 22, 4) : ctx.rect(0, 0, 130, 22);
-          ctx.fill();
-          
-          ctx.font = '10px Arial';
-          ctx.fillStyle = '#333333';
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(text.substring(0,14) + (text.length>14?'...':''), 6, 11);
-        } else {
-          // 💻 電腦版輸出：換行方塊排版
-          ctx.font = '11px Arial';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'top';
+    // 8. 繪製下方 X 軸文字與橘色方塊
+    const xLabels = document.querySelectorAll('.x-label-container');
+    xLabels.forEach((container, index) => {
+      const label = container.querySelector('.x-label');
+      if (!label) return;
 
-          const words = text.split('');
-          let lines = [];
-          let currentLine = '';
-          const maxWidth = 124;
+      const leftX = canvasPoints[index].x; // 對齊當前點的 X 座標
+      const text = label.innerText;
 
-          for (let n = 0; n < words.length; n++) {
-            let testLine = currentLine + words[n];
-            if (ctx.measureText(testLine).width > maxWidth && n > 0) {
-              lines.push(currentLine);
-              currentLine = words[n];
-            } else {
-              currentLine = testLine;
-            }
+      ctx.save();
+      if (isMobile) {
+        // 手機板：35 度斜角
+        ctx.translate(leftX, yAxisHeight + 12);
+        ctx.rotate(35 * Math.PI / 180);
+        
+        ctx.fillStyle = '#ffe0b2';
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(0, 0, 130, 22, 4) : ctx.rect(0, 0, 130, 22);
+        ctx.fill();
+        
+        ctx.font = '10px Arial';
+        ctx.fillStyle = '#333333';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text.substring(0,14) + (text.length > 14 ? '...' : ''), 6, 11);
+      } else {
+        // 電腦版：正向自動換行方塊
+        ctx.font = '11px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        const words = text.split('');
+        let lines = [];
+        let currentLine = '';
+        const maxWidth = 124;
+
+        for (let n = 0; n < words.length; n++) {
+          let testLine = currentLine + words[n];
+          if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+            lines.push(currentLine);
+            currentLine = words[n];
+          } else {
+            currentLine = testLine;
           }
-          lines.push(currentLine);
-
-          const rectWidth = 140;
-          const lineHeight = 15;
-          const rectHeight = lines.length * lineHeight + 8;
-          const rectX = leftX - rectWidth / 2;
-          const rectY = yAxisHeight + 15;
-
-          ctx.fillStyle = '#ffe0b2';
-          ctx.beginPath();
-          ctx.roundRect ? ctx.roundRect(rectX, rectY, rectWidth, rectHeight, 4) : ctx.rect(rectX, rectY, rectWidth, rectHeight);
-          ctx.fill();
-
-          ctx.fillStyle = '#333333';
-          lines.forEach((line, index) => {
-            ctx.fillText(line, leftX, rectY + 4 + (index * lineHeight));
-          });
         }
-        ctx.restore();
-      });
+        lines.push(currentLine);
 
-      const pngURL = canvas.toDataURL('image/png');
-      const downloadLink = document.createElement('a');
-      const name = userNameElement.innerText.replace(/[\(\)\s]/g, '');
-      downloadLink.download = `${name}_情緒折線圖_RWD.png`;
-      downloadLink.href = pngURL;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-      URL.revokeObjectURL(blobURL);
-    };
-    
-    image.src = blobURL;
+        const rectWidth = 140;
+        const lineHeight = 15;
+        const rectHeight = lines.length * lineHeight + 8;
+        const rectX = leftX - rectWidth / 2;
+        const rectY = yAxisHeight + 15;
+
+        ctx.fillStyle = '#ffe0b2';
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(rectX, rectY, rectWidth, rectHeight, 4) : ctx.rect(rectX, rectY, rectWidth, rectHeight);
+        ctx.fill();
+
+        ctx.fillStyle = '#333333';
+        lines.forEach((line, index) => {
+          ctx.fillText(line, leftX, rectY + 4 + (index * lineHeight));
+        });
+      }
+      ctx.restore();
+    });
+
+    // 9. 觸發圖片下載
+    const pngURL = canvas.toDataURL('image/png');
+    const downloadLink = document.createElement('a');
+    const name = userNameElement.innerText.replace(/[\(\)\s]/g, '');
+    downloadLink.download = `${name}_情緒折線圖.png`;
+    downloadLink.href = pngURL;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
   }
 
   window.onload = updateChart;
