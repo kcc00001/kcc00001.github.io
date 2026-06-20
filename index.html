@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>互動式情緒折線圖 (精準對齊優化版)</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background-color: #f9f9f9;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    margin: 0;
+    padding-bottom: 50px;
+  }
+
+  /* 標題和圖例區域 */
+  #header {
+    width: 100%;
+    max-width: 1200px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-sizing: border-box;
+  }
+
+  #title-area {
+    font-size: 28px;
+    margin-bottom: 15px;
+    text-align: center;
+  }
+
+  #user-name {
+    display: inline;
+    cursor: pointer;
+    border-bottom: 1px dashed #777;
+  }
+  #user-name:hover {
+    color: #2196F3;
+    border-bottom: 1px dashed #2196F3;
+  }
+
+  #legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 15px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    margin: 0 15px 10px;
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    background-color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+  }
+
+  .legend-item:hover {
+    background-color: #f0f0f0;
+    border-color: #bbb;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+  }
+
+  .legend-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    margin-right: 8px;
+    border: 1px solid #ddd;
+  }
+
+  /* 下載按鈕樣式 */
+  #download-btn {
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: background 0.2s;
+  }
+  #download-btn:hover {
+    background-color: #1976D2;
+  }
+
+  /* 滾動條核心外層容器 */
+  #chart-container {
+    width: 95%;
+    max-width: 1200px;
+    height: 65vh;
+    min-height: 450px;
+    background-color: #fff;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    position: relative;
+    border: 1px solid #ddd;
+    box-sizing: border-box;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* 固定的 Y 軸 */
+  #y-axis {
+    width: 60px;
+    height: calc(100% - 90px); /* 留出下方給變高的 X 軸空間 */
+    position: relative;
+    border-right: 1px solid #ddd;
+    background-color: #fff;
+    z-index: 5;
+  }
+
+  #y-axis-labels {
+    position: absolute;
+    top: 20px;
+    bottom: 0px;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column-reverse;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding-right: 10px;
+  }
+
+  .y-label {
+    font-size: 14px;
+    transform: translateY(7px);
+  }
+
+  #y-title {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%) rotate(-90deg);
+    white-space: nowrap;
+    font-weight: bold;
+    font-size: 14px;
+  }
+
+  /* 可滾動的內容包裝區 */
+  #scroll-wrapper {
+    flex-grow: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    position: relative;
+    height: 100%;
+  }
+
+  /* 自訂美化滾動條 */
+  #scroll-wrapper::-webkit-scrollbar {
+    height: 10px;
+  }
+  #scroll-wrapper::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+  #scroll-wrapper::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 5px;
+  }
+
+  /* 實際圖形與 X 軸的畫布（增加寬度讓長文字有伸展空間） */
+  #scroll-content {
+    width: 2400px; 
+    height: 100%;
+    position: relative;
+  }
+
+  /* 圖形區域 */
+  #chart-area {
+    width: 100%;
+    height: calc(100% - 90px); /* 與 Y 軸扣除高度一致 */
+    position: relative;
+  }
+
+  #chart-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* X 軸定位重構：改為相對畫布基底 */
+  #x-axis {
+    width: 100%;
+    height: 90px; /* 增加高度以容納長文字換行 */
+    border-top: 1px solid #ddd;
+    background-color: #fff;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+  }
+
+  /* 核心對齊改動：使用絕對定位，以點的 X 座標為中心 */
+  .x-label-container {
+    position: absolute;
+    top: 10px;
+    transform: translateX(-50%); /* 往左回推自身寬度的一半，達成完美置中 */
+    width: 160px; /* 限制寬度讓文字能自動換行 */
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  .x-label {
+    font-size: 12px;
+    text-align: center;
+    background-color: #ffe0b2;
+    padding: 5px 8px;
+    border-radius: 4px;
+    box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    word-break: break-all; /* 允許長中文字元換行 */
+    line-height: 1.4;
+  }
+
+  /* 互動元素樣式 */
+  .data-point {
+    cursor: pointer;
+    transition: r 0.2s;
+  }
+
+  .data-point:hover {
+    r: 8;
+  }
+
+  .data-point.dragging {
+    cursor: grabbing;
+    r: 9;
+  }
+
+  #tooltip {
+    position: absolute;
+    background: rgba(0,0,0,0.8);
+    color: #fff;
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    display: none;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .hint-text {
+    margin-top: 15px;
+    color: #666;
+    font-size: 15px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="title-area"><span id="user-name" onclick="editUserName()">(點我改成四類情緒中的一種)</span> 的 情緒折線圖</div>
+  <div id="legend"></div>
+  <button id="download-btn" onclick="downloadChartAsPNG()">📸 下載圖表為 PNG</button>
+</div>
+
+<div id="chart-container">
+  <div id="y-axis">
+    <div id="y-title">情緒強度</div>
+    <div id="y-axis-labels"></div>
+  </div>
+
+  <div id="scroll-wrapper">
+    <div id="scroll-content">
+      
+      <div id="chart-area">
+        <svg id="chart-svg" xmlns="http://www.w3.org/2000/svg">
+          <path id="chart-line" fill="none" stroke="#666" stroke-width="2" stroke-linejoin="round" d=""></path>
+          <g id="points-group"></g>
+        </svg>
+        <div id="tooltip">50</div>
+      </div>
+
+      <div id="x-axis"></div>
+
+    </div>
+  </div>
+</div>
+
+<p class="hint-text">💡 提示：點擊上方情緒按鈕可「一鍵變更所有點」；點擊圖中單個圓點可「個別切換情緒」；上下拖曳圓點可「調整強度」。若項目較多，可左右滾動查看圖表。</p>
+
+<script>
+  // 配置和數據
+  const emotions = [
+    { name: "1. 愉悅", color: "#4CAF50" }, 
+    { name: "2. 焦慮", color: "#FF9800" }, 
+    { name: "3. 無聊", color: "#9E9E9E" }, 
+    { name: "4. 無望 (無助感)", color: "#424242" } 
+  ];
+
+  const dataLabels = [
+    "第01章 統計學與科學方法（簡介） ", 
+    "第02章 統計學的基礎數理與測量概念（如，總和符號、測量尺度）", 
+    "小考1", 
+    "第03章 次數分配（如，分組、累積百分比、百分位數、百分等級）", 
+    "第04章 集中趨勢與變異性的測量方法（如，平均數、標準差、變異量）", 
+    "期中考",
+    "第05章 常態分配與標準分數（如，常態分配曲線、標準分數／ｚ值、查表）", 
+    "第06章 簡單相關（如，直線方程式、斜率、截距、相關係數兩種算法、決定係數）", 
+    "第07章 直線迴歸（如，最小平方迴歸線、標準誤）", 
+    "小考2", 
+    "第08章 隨機抽樣與機率（如，隨機抽樣、互斥事件、獨立事件、加法率、乘法率）", 
+    "第09章 二項分配（如，二項分配及展開、查表）", 
+    "期末考"
+  ];
+
+  // 初始化數據
+  let data = dataLabels.map((label, index) => ({
+    label: label,
+    score: 50,
+    emotionIndex: index % emotions.length 
+  }));
+
+  // DOM 元素
+  const legendElement = document.getElementById('legend');
+  const yAxisLabelsElement = document.getElementById('y-axis-labels');
+  const xAxisElement = document.getElementById('x-axis');
+  const svgElement = document.getElementById('chart-svg');
+  const pointsGroupElement = document.getElementById('points-group');
+  const chartLineElement = document.getElementById('chart-line');
+  const chartAreaElement = document.getElementById('chart-area');
+  const scrollContentElement = document.getElementById('scroll-content');
+  const tooltipElement = document.getElementById('tooltip');
+  const userNameElement = document.getElementById('user-name');
+
+  // 初始化 Y 軸刻度
+  for (let i = 0; i <= 100; i += 10) {
+    const yLabel = document.createElement('div');
+    yLabel.className = 'y-label';
+    yLabel.innerText = i;
+    yAxisLabelsElement.appendChild(yLabel);
+  }
+
+  // 初始化 圖例
+  emotions.forEach((emotion, idx) => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `
+      <div class="legend-color" style="background-color: ${emotion.color}"></div>
+      <div class="legend-text">${emotion.name}</div>
+    `;
+    
+    item.onclick = function() {
+      data.forEach(d => { d.emotionIndex = idx; });
+      updateChart();
+    };
+    legendElement.appendChild(item);
+  });
+
+  let pointsCoords = [];
+
+  function updateChart() {
+    const totalWidth = scrollContentElement.clientWidth;
+    const totalHeight = chartAreaElement.clientHeight;
+
+    const paddingX = 80; 
+    const chartHeight = totalHeight - 40; 
+    const yOrigin = totalHeight - 20;     
+    const xStep = (totalWidth - paddingX * 2) / (data.length - 1);
+
+    // 1. 計算點的坐標
+    pointsCoords = data.map((d, index) => ({
+      x: paddingX + index * xStep,
+      y: yOrigin - (d.score / 100) * chartHeight
+    }));
+
+    // 2. 更新折線
+    const pathD = pointsCoords.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+    chartLineElement.setAttribute('d', pathD);
+
+    // 3. 清除並重新繪製 X 軸標籤
+    xAxisElement.innerHTML = '';
+    
+    // 4. 清除舊點（從群組容器中清除）
+    pointsGroupElement.innerHTML = '';
+
+    pointsCoords.forEach((p, index) => {
+      // 動態產生對齊的 X 軸標籤
+      const container = document.createElement('div');
+      container.className = 'x-label-container';
+      container.style.left = `${p.x}px`; 
+      container.innerHTML = `<div class="x-label">${data[index].label}</div>`;
+      xAxisElement.appendChild(container);
+
+      // 產生圓點
+      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle.setAttribute('class', 'data-point');
+      circle.setAttribute('cx', p.x);
+      circle.setAttribute('cy', p.y);
+      circle.setAttribute('r', 6);
+      circle.setAttribute('fill', emotions[data[index].emotionIndex].color);
+      pointsGroupElement.appendChild(circle);
+
+      // 點擊事件
+      circle.onclick = function() {
+        if (!isDragging) {
+          data[index].emotionIndex = (data[index].emotionIndex + 1) % emotions.length;
+          circle.setAttribute('fill', emotions[data[index].emotionIndex].color);
+        }
+      };
+
+      // 拖曳事件
+      let isDragging = false;
+      let startY;
+      let startScore;
+
+      circle.onmousedown = function(e) {
+        isDragging = true;
+        startY = e.clientY;
+        startScore = data[index].score;
+        circle.classList.add('dragging');
+        document.body.style.cursor = 'grabbing';
+        showTooltip(data[index].score, pointsCoords[index].x, pointsCoords[index].y);
+
+        const onMouseMove = (moveEvent) => {
+          if (isDragging) {
+            const deltaY = startY - moveEvent.clientY;
+            let newScore = startScore + Math.round((deltaY / chartHeight) * 100);
+            newScore = Math.max(0, Math.min(100, newScore));
+
+            data[index].score = newScore;
+            
+            const newY = yOrigin - (newScore / 100) * chartHeight;
+            pointsCoords[index].y = newY;
+            circle.setAttribute('cy', newY);
+
+            const newPathD = pointsCoords.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`).join(' ');
+            chartLineElement.setAttribute('d', newPathD);
+
+            updateTooltip(newScore, pointsCoords[index].x, newY);
+          }
+        };
+
+        const onMouseUp = () => {
+          if (isDragging) {
+            isDragging = false;
+            circle.classList.remove('dragging');
+            document.body.style.cursor = '';
+            hideTooltip();
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+          }
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      };
+    });
+  }
+
+  // 工具提示
+  function showTooltip(score, x, y) {
+    tooltipElement.style.display = 'block';
+    updateTooltip(score, x, y);
+  }
+
+  function updateTooltip(score, x, y) {
+    tooltipElement.innerText = score;
+    tooltipElement.style.left = `${x + 12}px`;
+    tooltipElement.style.top = `${y - 15}px`;
+  }
+
+  function hideTooltip() {
+    tooltipElement.style.display = 'none';
+  }
+
+  // 編輯名稱
+  function editUserName() {
+    const currentName = userNameElement.innerText;
+    const newName = prompt("請輸入使用者名稱：", currentName);
+    if (newName && newName.trim() !== "") {
+      userNameElement.innerText = newName.trim();
+    }
+  }
+
+  // 新增功能：一鍵下載為 PNG 檔案（包含完整的滾動軸內容與文字）
+  function downloadChartAsPNG() {
+    const svg = document.getElementById('chart-svg');
+    const fullWidth = scrollContentElement.clientWidth;
+    const fullHeight = scrollContentElement.clientHeight;
+    
+    // 建立一個隱藏的 Canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = fullWidth;
+    canvas.height = fullHeight;
+    const ctx = canvas.getContext('2d');
+
+    // 1. 填滿白色背景
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, fullWidth, fullHeight);
+
+    // 2. 將 SVG 內容轉換成 Image 並繪製到 Canvas
+    const svgString = new XMLSerializer().serializeToString(svg);
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const URL = window.URL || window.webkitURL || window;
+    const blobURL = URL.createObjectURL(svgBlob);
+    
+    const image = new Image();
+    image.onload = function() {
+      ctx.drawImage(image, 0, 0);
+
+      // 3. 繪製 X 軸的文字與橘色背景框（因為原版 X 軸是 HTML 元素，需手動補繪至 Canvas）
+      const xLabels = document.querySelectorAll('.x-label-container');
+      xLabels.forEach((container) => {
+        const label = container.querySelector('.x-label');
+        if (!label) return;
+
+        // 取得絕對 X 座標 (由 style.left 決定)
+        const leftX = parseFloat(container.style.left);
+        const yAxisHeight = chartAreaElement.clientHeight; // 圖表線條區高度
+
+        // 設定文字字型與樣式
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        // 模擬自動換行並計算多行文字
+        const text = label.innerText;
+        const words = text.split('');
+        let lines = [];
+        let currentLine = '';
+        const maxWidth = 144; // 扣除 padding 的文字寬度
+
+        for (let n = 0; n < words.length; n++) {
+          let testLine = currentLine + words[n];
+          let metrics = ctx.measureText(testLine);
+          if (metrics.width > maxWidth && n > 0) {
+            lines.push(currentLine);
+            currentLine = words[n];
+          } else {
+            currentLine = testLine;
+          }
+        }
+        lines.push(currentLine);
+
+        // 繪製橘色背景框
+        const rectWidth = 160;
+        const lineHeight = 16;
+        const rectHeight = lines.length * lineHeight + 10;
+        const rectX = leftX - rectWidth / 2;
+        const rectY = yAxisHeight + 10;
+
+        ctx.fillStyle = '#ffe0b2';
+        // 畫圓角矩形
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(rectX, rectY, rectWidth, rectHeight, 4) : ctx.rect(rectX, rectY, rectWidth, rectHeight);
+        ctx.fill();
+
+        // 畫邊框陰影特效
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+        ctx.stroke();
+
+        // 填入文字
+        ctx.fillStyle = '#333333';
+        lines.forEach((line, index) => {
+          ctx.fillText(line, leftX, rectY + 5 + (index * lineHeight));
+        });
+      });
+
+      // 4. 輸出並下載圖片
+      const pngURL = canvas.toDataURL('image/png');
+      const downloadLink = document.createElement('a');
+      const name = userNameElement.innerText.replace(/[\(\)\s]/g, '');
+      downloadLink.download = `${name}_情緒折線圖.png`;
+      downloadLink.href = pngURL;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      URL.revokeObjectURL(blobURL);
+    };
+    
+    image.src = blobURL;
+  }
+
+  window.onload = updateChart;
+  window.onresize = updateChart;
+</script>
+
+</body>
+</html>
